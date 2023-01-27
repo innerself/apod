@@ -1,0 +1,159 @@
+import asyncio
+import datetime
+import os
+from dataclasses import dataclass
+from typing import List, Optional
+
+import requests
+from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+from loguru import logger
+from peewee import IntegrityError, SqliteDatabase
+from telegram import Bot
+from telegram.helpers import escape_markdown
+import sys
+import models
+
+logger.remove()
+logger.add(
+    sys.stdout,
+    colorize=True,
+    format="<green>{time}</green> <level>{message}</level>",
+    backtrace=True,
+    diagnose=True
+)
+
+load_dotenv()
+
+root_url = os.environ['ROOT_URL']
+db = SqliteDatabase('db.sqlite')
+
+
+@dataclass
+class Issue:
+    title: str
+    body: str
+    issue_url: str
+    image_url: Optional[str]
+    pub_date: datetime.date
+
+
+def get_image_from_issue(rel_url: str):
+    full_url = f'{root_url}{rel_url}'
+    full_issue_response = requests.get(full_url)
+
+    if not full_issue_response.content:
+        return None
+
+    issue_soup = BeautifulSoup(full_issue_response.content, 'html.parser')
+
+    img_tags = issue_soup.find(id='content').findChildren('img')
+    url_list = [x for x in img_tags if x.get('src').startswith('http://images.astronet.ru/pubd/')]
+    if len(url_list) > 1:
+        raise ValueError(f'More than one image in issue {rel_url}')
+
+    url = url_list[0]['src']
+
+    return url
+
+
+def get_last_issues(url: str):
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, 'html.parser')
+
+    issues = []
+    title_tags = soup.find(id='content').findChildren('p', {'class': 'title'})
+    for tag in title_tags:
+        issue_url = tag.a['href']
+
+        issue_raw_date = tag.small.b.text.split(' | ')[0]
+        day, month, year = [int(x) for x in issue_raw_date.split('.')]
+        issue_date = datetime.date(year, month, day)
+
+        preview_image_url = tag.a.img['src']
+        image_url = get_image_from_issue(issue_url)
+
+        title = tag.b.text.strip()
+        body_tag = tag.find_next('p', {'class': 'abstract'})
+        body_text = ' '.join(body_tag.small.text.split())
+
+        issue = Issue(
+            title=title,
+            body=body_text,
+            issue_url=issue_url,
+            image_url=image_url or preview_image_url,
+            pub_date=issue_date,
+        )
+        issues.append(issue)
+
+    return issues
+
+
+def create_issue(issue: Issue) -> models.Issue:
+    try:
+        return models.Issue.create(
+            title=issue.title,
+            body=issue.body,
+            issue_url=issue.issue_url,
+            image_url=issue.image_url,
+            pub_date=issue.pub_date,
+        )
+    except IntegrityError as err:
+        if str(err) != 'UNIQUE constraint failed: issue.issue_url':
+            logger.error(err)
+    except Exception as err:
+        logger.exception(err)
+
+
+def get_unpublished():
+    return models.Issue.select().where(models.Issue.published == False)
+
+
+async def publish_issues(unpublished: List[models.Issue]):
+    bot = Bot(token=os.environ['BOT_TOKEN'])
+    # logger.info(f'Connected to bot {bot.first_name}')
+
+    for issue in sorted(unpublished, key=lambda x: x.pub_date):
+        title = escape_markdown(issue.title.strip(), version=2)
+        body = escape_markdown(issue.body, version=2)
+        url = escape_markdown(f'{root_url}{issue.issue_url}', version=2)
+
+        caption = f'*{title}*\n\n{body}\n\n[Подробности на astronet\\.ru]({url})'
+
+        await bot.send_photo(
+            chat_id=os.environ['CHAT_ID'],
+            photo=issue.image_url,
+            caption=caption,
+            parse_mode='MarkdownV2',
+        )
+
+        issue.published = True
+        issue.save()
+
+        logger.info(f'Published {issue.issue_url} issue')
+
+        await asyncio.sleep(2)
+
+
+async def main():
+    logger.info('Started APOD Telegram publishing service')
+    models.init_db()
+    apod_full_url = f'{os.environ["ROOT_URL"]}{os.environ["APOD_URL"]}'
+
+    while True:
+        issues = get_last_issues(apod_full_url)
+        logger.info(f'Parsed {len(issues)} issue(s)')
+        for issue in issues:
+            create_issue(issue)
+
+        if unpublished := get_unpublished():
+            logger.info(f'Got {len(unpublished)} unpublished issue(s)')
+            await publish_issues(unpublished)
+        else:
+            logger.info(f'No unpublished issues')
+
+        await asyncio.sleep(int(os.environ['PARSING_INTERVAL_SEC']))
+
+
+if __name__ == '__main__':
+    asyncio.run(main())

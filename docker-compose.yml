@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  apod:
+    image: spetrin/apod:0.0.1
+    restart: always
+    volumes:
+      - "./db.sqlite:/app/db.sqlite"
+    environment:
+      - ROOT_URL=${ROOT_URL}
+      - APOD_URL=${APOD_URL}
+      - BOT_TOKEN=${BOT_TOKEN}
+      - CHAT_ID=${CHAT_ID}
+      - PARSING_INTERVAL_SEC=${PARSING_INTERVAL_SEC}
