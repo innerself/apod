@@ -1,17 +1,19 @@
 import asyncio
 import datetime
 import os
+import sys
 from dataclasses import dataclass
 from typing import List, Optional
 
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+from langdetect import detect
 from loguru import logger
 from peewee import IntegrityError, SqliteDatabase
 from telegram import Bot
 from telegram.helpers import escape_markdown
-import sys
+
 import models
 
 logger.remove()
@@ -111,13 +113,16 @@ def get_unpublished():
 
 async def publish_issues(unpublished: List[models.Issue]):
     bot = Bot(token=os.environ['BOT_TOKEN'])
-    # logger.info(f'Connected to bot {bot.first_name}')
 
     for issue in sorted(unpublished, key=lambda x: x.pub_date):
         title = escape_markdown(issue.title.strip(), version=2)
-        body = escape_markdown(issue.body, version=2)
-        url = escape_markdown(f'{root_url}{issue.issue_url}', version=2)
 
+        body = escape_markdown(issue.body, version=2)
+        if (body_lang := detect(body)) != 'ru':
+            logger.warning(f'Issue {issue.issue_url} is in "{body_lang}" language -> skipping')
+            continue
+
+        url = escape_markdown(f'{root_url}{issue.issue_url}', version=2)
         caption = f'*{title}*\n\n{body}\n\n[Подробности на astronet\\.ru]({url})'
 
         await bot.send_photo(
