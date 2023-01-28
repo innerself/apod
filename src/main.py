@@ -79,6 +79,10 @@ def get_last_issues(url: str):
         body_tag = tag.find_next('p', {'class': 'abstract'})
         body_text = ' '.join(body_tag.small.text.split())
 
+        if (body_lang := detect(body_text)) != 'ru':
+            logger.warning(f'Issue {issue_url} is in "{body_lang}" language -> skipping')
+            continue
+
         issue = Issue(
             title=title,
             body=body_text,
@@ -116,12 +120,7 @@ async def publish_issues(unpublished: List[models.Issue]):
 
     for issue in sorted(unpublished, key=lambda x: x.pub_date):
         title = escape_markdown(issue.title.strip(), version=2)
-
         body = escape_markdown(issue.body, version=2)
-        if (body_lang := detect(body)) != 'ru':
-            logger.warning(f'Issue {issue.issue_url} is in "{body_lang}" language -> skipping')
-            continue
-
         url = escape_markdown(f'{root_url}{issue.issue_url}', version=2)
         caption = f'*{title}*\n\n{body}\n\n[Подробности на astronet\\.ru]({url})'
 
