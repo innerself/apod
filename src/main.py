@@ -50,11 +50,18 @@ def get_image_from_issue(rel_url: str):
     issue_soup = BeautifulSoup(full_issue_response.content, 'html.parser')
 
     img_tags = issue_soup.find(id='content').findChildren('img')
-    url_list = [x for x in img_tags if x.get('src').startswith('http://images.astronet.ru/pubd/')]
-    if len(url_list) > 1:
-        raise ValueError(f'More than one image in issue {rel_url}')
+    url_list = [
+        x for x in img_tags
+        if x.get('src').startswith('http://images.astronet.ru/pubd/')
+        or x.get('src').startswith('https://images.astronet.ru/pubd/')
+    ]
 
-    url = url_list[0]['src']
+    if not url_list:
+        url = ''
+    elif len(url_list) > 1:
+        raise ValueError(f'More than one image in issue {rel_url}')
+    else:
+        url = url_list[0]['src']
 
     return url
 
