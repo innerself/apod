@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   apod:
-    image: spetrin/apod:0.0.2
+    image: spetrin/apod:${APOD_VERSION}
     restart: always
     volumes:
       - "./db.sqlite:/app/db.sqlite"

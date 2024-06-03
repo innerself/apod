@@ -54,10 +54,15 @@ def get_image_from_issue(rel_url: str):
     if len(url_list) == 0:
         video_tags = issue_soup.find(id='content').findChildren('iframe')
         url_list = [x for x in video_tags if x.get('src').startswith('https://www.youtube.com/embed/')]
+
+    if not url_list:
+        url = ''
     elif len(url_list) > 1:
         raise ValueError(f'More than one image in issue {rel_url}')
+    else:
+        url = url_list[0]['src']
 
-    return url_list[0]['src']
+    return url
 
 
 def get_last_issues(url: str):
