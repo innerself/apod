@@ -53,7 +53,10 @@ def get_image_from_issue(rel_url: str):
     url_list = [x for x in img_tags if x.get('src').startswith('https://images.astronet.ru/pubd/')]
     if len(url_list) == 0:
         video_tags = issue_soup.find(id='content').findChildren('iframe')
-        url_list = [x for x in video_tags if x.get('src').startswith('https://www.youtube.com/embed/')]
+        url_list = [
+            x for x in video_tags
+            if x.get('src').startswith('https://www.youtube.com/embed/')
+        ]
 
     if not url_list:
         url = ''
@@ -137,9 +140,12 @@ async def publish_issues(unpublished: List[models.Issue]):
         }
 
         if 'youtube' in issue.image_url:
-            await bot.send_video(
-                video=issue.image_url,
-                **common_params,
+            video_url = issue.image_url.replace('embed/', 'watch?v=').removesuffix('?rel=0')
+            video_url = escape_markdown(video_url, version=2)
+            await bot.send_message(
+                chat_id=os.environ['CHAT_ID'],
+                text=f'{video_url}\n\n{caption}',
+                parse_mode='MarkdownV2',
             )
         else:
             await bot.send_photo(
