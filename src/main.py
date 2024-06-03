@@ -50,13 +50,14 @@ def get_image_from_issue(rel_url: str):
     issue_soup = BeautifulSoup(full_issue_response.content, 'html.parser')
 
     img_tags = issue_soup.find(id='content').findChildren('img')
-    url_list = [x for x in img_tags if x.get('src').startswith('http://images.astronet.ru/pubd/')]
-    if len(url_list) > 1:
+    url_list = [x for x in img_tags if x.get('src').startswith('https://images.astronet.ru/pubd/')]
+    if len(url_list) == 0:
+        video_tags = issue_soup.find(id='content').findChildren('iframe')
+        url_list = [x for x in video_tags if x.get('src').startswith('https://www.youtube.com/embed/')]
+    elif len(url_list) > 1:
         raise ValueError(f'More than one image in issue {rel_url}')
 
-    url = url_list[0]['src']
-
-    return url
+    return url_list[0]['src']
 
 
 def get_last_issues(url: str):
@@ -124,12 +125,22 @@ async def publish_issues(unpublished: List[models.Issue]):
         url = escape_markdown(f'{root_url}{issue.issue_url}', version=2)
         caption = f'*{title}*\n\n{body}\n\n[Подробности на astronet\\.ru]({url})'
 
-        await bot.send_photo(
-            chat_id=os.environ['CHAT_ID'],
-            photo=issue.image_url,
-            caption=caption,
-            parse_mode='MarkdownV2',
-        )
+        common_params = {
+            'chat_id': os.environ['CHAT_ID'],
+            'caption': caption,
+            'parse_mode': 'MarkdownV2',
+        }
+
+        if 'youtube' in issue.image_url:
+            await bot.send_video(
+                video=issue.image_url,
+                **common_params,
+            )
+        else:
+            await bot.send_photo(
+                photo=issue.image_url,
+                **common_params,
+            )
 
         issue.published = True
         issue.save()
