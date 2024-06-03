@@ -142,16 +142,22 @@ async def publish_issues(unpublished: List[models.Issue]):
         if 'youtube' in issue.image_url:
             video_url = issue.image_url.replace('embed/', 'watch?v=').removesuffix('?rel=0')
             video_url = escape_markdown(video_url, version=2)
-            await bot.send_message(
-                chat_id=os.environ['CHAT_ID'],
-                text=f'{video_url}\n\n{caption}',
-                parse_mode='MarkdownV2',
-            )
+            try:
+                await bot.send_message(
+                    chat_id=os.environ['CHAT_ID'],
+                    text=f'{video_url}\n\n{caption}',
+                    parse_mode='MarkdownV2',
+                )
+            except Exception as err:
+                logger.exception(err)
         else:
-            await bot.send_photo(
-                photo=issue.image_url,
-                **common_params,
-            )
+            try:
+                await bot.send_photo(
+                    photo=issue.image_url,
+                    **common_params,
+                )
+            except Exception as err:
+                logger.exception(err)
 
         issue.published = True
         issue.save()
