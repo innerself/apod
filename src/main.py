@@ -75,31 +75,34 @@ def get_last_issues(url: str):
     issues = []
     title_tags = soup.find(id='content').findChildren('p', {'class': 'title'})
     for tag in title_tags:
-        issue_url = tag.a['href']
+        try:
+            issue_url = tag.a['href']
 
-        issue_raw_date = tag.small.b.text.split(' | ')[0]
-        day, month, year = [int(x) for x in issue_raw_date.split('.')]
-        issue_date = datetime.date(year, month, day)
+            issue_raw_date = tag.small.b.text.split(' | ')[0]
+            day, month, year = [int(x) for x in issue_raw_date.split('.')]
+            issue_date = datetime.date(year, month, day)
 
-        preview_image_url = tag.a.img['src']
-        image_url = get_image_from_issue(issue_url)
+            preview_image_url = tag.a.img['src']
+            image_url = get_image_from_issue(issue_url)
 
-        title = tag.b.text.strip()
-        body_tag = tag.find_next('p', {'class': 'abstract'})
-        body_text = ' '.join(body_tag.small.text.split())
+            title = tag.b.text.strip()
+            body_tag = tag.find_next('p', {'class': 'abstract'})
+            body_text = ' '.join(body_tag.small.text.split())
 
-        if (body_lang := detect(body_text)) != 'ru':
-            logger.warning(f'Issue {issue_url} is in "{body_lang}" language -> skipping')
-            continue
+            if (body_lang := detect(body_text)) != 'ru':
+                logger.warning(f'Issue {issue_url} is in "{body_lang}" language -> skipping')
+                continue
 
-        issue = Issue(
-            title=title,
-            body=body_text,
-            issue_url=issue_url,
-            image_url=image_url or preview_image_url,
-            pub_date=issue_date,
-        )
-        issues.append(issue)
+            issue = Issue(
+                title=title,
+                body=body_text,
+                issue_url=issue_url,
+                image_url=image_url or preview_image_url,
+                pub_date=issue_date,
+            )
+            issues.append(issue)
+        except Exception as err:
+            logger.exception(err)
 
     return issues
 
