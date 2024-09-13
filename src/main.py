@@ -84,10 +84,9 @@ def get_last_issues(url: str):
 
             preview_image_url = tag.a.img['src'] if tag.a.img else None
             image_url = get_image_from_issue(
-                issue_url.removeprefix(
-                    'https://www.astronet.ru',
-                    'http://www.astronet.ru',
-                )
+                issue_url
+                .removeprefix('http://www.astronet.ru')
+                .removeprefix('https://www.astronet.ru')
             )
 
             title = tag.b.text.strip()
