@@ -82,7 +82,7 @@ def get_last_issues(url: str):
             day, month, year = [int(x) for x in issue_raw_date.split('.')]
             issue_date = datetime.date(year, month, day)
 
-            preview_image_url = tag.a.img['src']
+            preview_image_url = tag.a.img['src'] if tag.a.img else None
             image_url = get_image_from_issue(issue_url)
 
             title = tag.b.text.strip()
