@@ -83,7 +83,12 @@ def get_last_issues(url: str):
             issue_date = datetime.date(year, month, day)
 
             preview_image_url = tag.a.img['src'] if tag.a.img else None
-            image_url = get_image_from_issue(issue_url)
+            image_url = get_image_from_issue(
+                issue_url.removeprefix(
+                    'https://www.astronet.ru',
+                    'http://www.astronet.ru',
+                )
+            )
 
             title = tag.b.text.strip()
             body_tag = tag.find_next('p', {'class': 'abstract'})
