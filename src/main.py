@@ -76,7 +76,12 @@ def get_last_issues(url: str):
     title_tags = soup.find(id='content').findChildren('p', {'class': 'title'})
     for tag in title_tags:
         try:
-            issue_url = tag.a['href']
+            issue_url = (
+                tag.a['href']
+                .removeprefix('https')
+                .removeprefix('http')
+                .removeprefix('://www.astronet.ru')
+            )
 
             issue_raw_date = tag.small.b.text.split(' | ')[0]
             day, month, year = [int(x) for x in issue_raw_date.split('.')]
