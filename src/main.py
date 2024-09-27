@@ -200,6 +200,6 @@ async def main():
 
 
 if __name__ == '__main__':
-    # import sentry_sdk
-    # sentry_sdk.init(os.environ['SENTRY_DSN'])
+    import sentry_sdk
+    sentry_sdk.init(os.environ['SENTRY_DSN'])
     asyncio.run(main())
