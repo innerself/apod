@@ -10,3 +10,4 @@ services:
       - BOT_TOKEN=${BOT_TOKEN}
       - CHAT_ID=${CHAT_ID}
       - PARSING_INTERVAL_SEC=${PARSING_INTERVAL_SEC}
+      - SENTRY_DSN=${SENTRY_DSN}
