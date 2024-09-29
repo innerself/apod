@@ -2,12 +2,14 @@ import asyncio
 import datetime
 import os
 import sys
+import time
 from dataclasses import dataclass
 from typing import List, Optional
 
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+from httpx import AsyncClient
 from langdetect import detect
 from loguru import logger
 from peewee import IntegrityError, SqliteDatabase
@@ -29,6 +31,7 @@ load_dotenv()
 
 root_url = os.environ['ROOT_URL']
 db = SqliteDatabase('db.sqlite')
+web_client = AsyncClient()
 
 
 @dataclass
@@ -73,7 +76,18 @@ def get_last_issues(url: str):
     soup = BeautifulSoup(response.content, 'html.parser')
 
     issues = []
-    title_tags = soup.find(id='content').findChildren('p', {'class': 'title'})
+    retries = 5
+    while True:
+        try:
+            title_tags = soup.find(id='content').findChildren('p', {'class': 'title'})
+            break
+        except Exception as e:
+            logger.error(e)
+            retries -= 1
+            if retries == 0:
+                raise
+        time.sleep(10)
+
     for tag in title_tags:
         try:
             issue_url = (
@@ -179,6 +193,10 @@ async def publish_issues(unpublished: List[models.Issue]):
         await asyncio.sleep(2)
 
 
+def now() -> datetime.datetime:
+    return datetime.datetime.now(tz=datetime.timezone.utc)
+
+
 async def main():
     logger.info('Started APOD Telegram publishing service')
     models.init_db()
@@ -196,10 +214,12 @@ async def main():
         else:
             logger.info(f'No unpublished issues')
 
+        await web_client.get(url=os.environ['HEALTHCHECK_URL'])
         await asyncio.sleep(int(os.environ['PARSING_INTERVAL_SEC']))
 
 
 if __name__ == '__main__':
     import sentry_sdk
+
     sentry_sdk.init(os.environ['SENTRY_DSN'])
     asyncio.run(main())
