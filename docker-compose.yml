@@ -5,9 +5,10 @@ services:
     volumes:
       - "./db.sqlite:/app/db.sqlite"
     environment:
-      - ROOT_URL=${ROOT_URL}
-      - APOD_URL=${APOD_URL}
-      - BOT_TOKEN=${BOT_TOKEN}
-      - CHAT_ID=${CHAT_ID}
-      - PARSING_INTERVAL_SEC=${PARSING_INTERVAL_SEC}
-      - SENTRY_DSN=${SENTRY_DSN}
+      ROOT_URL: ${ROOT_URL}
+      APOD_URL: ${APOD_URL}
+      BOT_TOKEN: ${BOT_TOKEN}
+      CHAT_ID: ${CHAT_ID}
+      PARSING_INTERVAL_SEC: ${PARSING_INTERVAL_SEC}
+      SENTRY_DSN: ${SENTRY_DSN}
+      HEALTHCHECK_URL: ${HEALTHCHECK_URL}
