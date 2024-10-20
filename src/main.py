@@ -13,6 +13,7 @@ from httpx import AsyncClient
 from langdetect import detect
 from loguru import logger
 from peewee import IntegrityError, SqliteDatabase
+from requests.exceptions import HTTPError
 from telegram import Bot
 from telegram.helpers import escape_markdown
 
@@ -73,6 +74,9 @@ def get_image_from_issue(rel_url: str):
 
 def get_last_issues(url: str):
     response = requests.get(url)
+    if response.status_code != 200:
+        raise HTTPError(response.json())
+
     soup = BeautifulSoup(response.content, 'html.parser')
 
     issues = []
@@ -203,18 +207,22 @@ async def main():
     apod_full_url = f'{os.environ["ROOT_URL"]}{os.environ["APOD_URL"]}'
 
     while True:
-        issues = get_last_issues(apod_full_url)
-        logger.info(f'Parsed {len(issues)} issue(s)')
-        for issue in issues:
-            create_issue(issue)
+        try:
+            issues = get_last_issues(apod_full_url)
+            logger.info(f'Parsed {len(issues)} issue(s)')
+            for issue in issues:
+                create_issue(issue)
 
-        if unpublished := get_unpublished():
-            logger.info(f'Got {len(unpublished)} unpublished issue(s)')
-            await publish_issues(unpublished)
-        else:
-            logger.info(f'No unpublished issues')
+            if unpublished := get_unpublished():
+                logger.info(f'Got {len(unpublished)} unpublished issue(s)')
+                await publish_issues(unpublished)
+            else:
+                logger.info(f'No unpublished issues')
 
-        await web_client.get(url=os.environ['HEALTHCHECK_URL'])
+            await web_client.get(url=os.environ['HEALTHCHECK_URL'])
+        except HTTPError as err:
+            logger.error(err)
+
         await asyncio.sleep(int(os.environ['PARSING_INTERVAL_SEC']))
 
 
