@@ -13,7 +13,7 @@ from httpx import AsyncClient
 from langdetect import detect
 from loguru import logger
 from peewee import IntegrityError, SqliteDatabase
-from requests.exceptions import HTTPError
+from requests.exceptions import HTTPError, ConnectTimeout
 from telegram import Bot
 from telegram.helpers import escape_markdown
 
@@ -220,7 +220,7 @@ async def main():
                 logger.info(f'No unpublished issues')
 
             await web_client.get(url=os.environ['HEALTHCHECK_URL'])
-        except HTTPError as err:
+        except (HTTPError, ConnectTimeout) as err:
             logger.error(err)
 
         await asyncio.sleep(int(os.environ['PARSING_INTERVAL_SEC']))
