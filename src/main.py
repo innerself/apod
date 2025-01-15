@@ -75,7 +75,7 @@ def get_image_from_issue(rel_url: str):
 def get_last_issues(url: str):
     response = requests.get(url)
     if response.status_code != 200:
-        raise HTTPError(response.json())
+        raise HTTPError(f'{response.status_code}: {response.reason}')
 
     soup = BeautifulSoup(response.content, 'html.parser')
 
