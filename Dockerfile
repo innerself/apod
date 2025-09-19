@@ -1,13 +1,15 @@
-FROM python:3.11
-
-RUN apt-get update && apt-get -y upgrade
-
-RUN python3.11 -m pip install --upgrade pip
+FROM python:3.11-slim
 
 WORKDIR /app
-COPY ./requirements.txt /app
-RUN pip install -r ./requirements.txt
 
-COPY ./src /app
+RUN apt-get update && apt-get -y upgrade && \
+    python3.11 -m pip install --upgrade pip && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-CMD [ "python", "/app/main.py" ]
+COPY ./requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY ./src .
+
+CMD [ "python", "main.py" ]
