@@ -14,8 +14,10 @@ from langdetect import detect
 from loguru import logger
 from peewee import IntegrityError, SqliteDatabase
 from requests.exceptions import HTTPError, ConnectTimeout
-from telegram import Bot
-from telegram.helpers import escape_markdown
+from aiogram import Bot
+from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.enums import ParseMode
+from aiogram.utils.text_decorations import markdown_decoration
 
 import models
 
@@ -53,13 +55,17 @@ def get_image_from_issue(rel_url: str):
 
     issue_soup = BeautifulSoup(full_issue_response.content, 'html.parser')
 
-    img_tags = issue_soup.find(id='content').findChildren('img')
-    url_list = [x for x in img_tags if x.get('src').startswith('https://images.astronet.ru/pubd/')]
+    content_div = issue_soup.find(id='content')
+    if content_div is None:
+        return None
+
+    img_tags = content_div.find_all('img')
+    url_list = [x for x in img_tags if '://images.astronet.ru/pubd/' in (x.get('src') or '')]
     if len(url_list) == 0:
-        video_tags = issue_soup.find(id='content').findChildren('iframe')
+        video_tags = content_div.find_all('iframe')
         url_list = [
             x for x in video_tags
-            if x.get('src').startswith('https://www.youtube.com/embed/')
+            if (x.get('src') or '').startswith('https://www.youtube.com/embed/')
         ]
 
     if not url_list:
@@ -83,7 +89,10 @@ def get_last_issues(url: str):
     retries = 5
     while True:
         try:
-            title_tags = soup.find(id='content').findChildren('p', {'class': 'title'})
+            content_div = soup.find(id='content')
+            if content_div is None:
+                raise ValueError('Could not find #content div')
+            title_tags = content_div.find_all('p', {'class': 'title'})
             break
         except Exception as e:
             logger.error(e)
@@ -120,11 +129,16 @@ def get_last_issues(url: str):
                 logger.warning(f'Issue {issue_url} is in "{body_lang}" language -> skipping')
                 continue
 
+            resolved_image_url = image_url or preview_image_url
+            if not resolved_image_url:
+                logger.warning(f'Issue {issue_url} has no image -> skipping')
+                continue
+
             issue = Issue(
                 title=title,
                 body=body_text,
                 issue_url=issue_url,
-                image_url=image_url or preview_image_url,
+                image_url=resolved_image_url,
                 pub_date=issue_date,
             )
             issues.append(issue)
@@ -151,50 +165,57 @@ def create_issue(issue: Issue) -> models.Issue:
 
 
 def get_unpublished():
-    return models.Issue.select().where(models.Issue.published == False)
+    return models.Issue.select().where(
+        (models.Issue.published == False) &
+        models.Issue.image_url.is_null(False) &
+        (models.Issue.image_url != '')
+    )
 
 
 async def publish_issues(unpublished: List[models.Issue]):
-    bot = Bot(token=os.environ['BOT_TOKEN'])
+    session = AiohttpSession(timeout=30)
+    async with Bot(token=os.environ['BOT_TOKEN'], session=session) as bot:
+        for issue in sorted(unpublished, key=lambda x: x.pub_date):
+            title = markdown_decoration.quote(issue.title.strip())
+            body = markdown_decoration.quote(issue.body)
+            url = markdown_decoration.quote(f'{root_url}{issue.issue_url}')
+            caption = f'*{title}*\n\n{body}\n\n[Подробности на astronet\\.ru]({url})'
 
-    for issue in sorted(unpublished, key=lambda x: x.pub_date):
-        title = escape_markdown(issue.title.strip(), version=2)
-        body = escape_markdown(issue.body, version=2)
-        url = escape_markdown(f'{root_url}{issue.issue_url}', version=2)
-        caption = f'*{title}*\n\n{body}\n\n[Подробности на astronet\\.ru]({url})'
+            common_params = {
+                'chat_id': os.environ['CHAT_ID'],
+                'caption': caption,
+                'parse_mode': ParseMode.MARKDOWN_V2,
+            }
 
-        common_params = {
-            'chat_id': os.environ['CHAT_ID'],
-            'caption': caption,
-            'parse_mode': 'MarkdownV2',
-        }
+            sent = False
+            if 'youtube' in issue.image_url:
+                video_url = issue.image_url.replace('embed/', 'watch?v=').removesuffix('?rel=0')
+                video_url = markdown_decoration.quote(video_url)
+                try:
+                    await bot.send_message(
+                        chat_id=os.environ['CHAT_ID'],
+                        text=f'{video_url}\n\n{caption}',
+                        parse_mode=ParseMode.MARKDOWN_V2,
+                    )
+                    sent = True
+                except Exception as err:
+                    logger.exception(err)
+            else:
+                try:
+                    await bot.send_photo(
+                        photo=issue.image_url,
+                        **common_params,
+                    )
+                    sent = True
+                except Exception as err:
+                    logger.exception(err)
 
-        if 'youtube' in issue.image_url:
-            video_url = issue.image_url.replace('embed/', 'watch?v=').removesuffix('?rel=0')
-            video_url = escape_markdown(video_url, version=2)
-            try:
-                await bot.send_message(
-                    chat_id=os.environ['CHAT_ID'],
-                    text=f'{video_url}\n\n{caption}',
-                    parse_mode='MarkdownV2',
-                )
-            except Exception as err:
-                logger.exception(err)
-        else:
-            try:
-                await bot.send_photo(
-                    photo=issue.image_url,
-                    **common_params,
-                )
-            except Exception as err:
-                logger.exception(err)
+            if sent:
+                issue.published = True
+                issue.save()
+                logger.info(f'Published {issue.issue_url} issue')
 
-        issue.published = True
-        issue.save()
-
-        logger.info(f'Published {issue.issue_url} issue')
-
-        await asyncio.sleep(2)
+            await asyncio.sleep(2)
 
 
 def now() -> datetime.datetime:
@@ -219,7 +240,10 @@ async def main():
             else:
                 logger.info(f'No unpublished issues')
 
-            await web_client.get(url=os.environ['HEALTHCHECK_URL'])
+            try:
+                await web_client.get(url=os.environ['HEALTHCHECK_URL'])
+            except Exception as err:
+                logger.error(f'Healthcheck failed: {err}')
         except (HTTPError, ConnectTimeout) as err:
             logger.error(err)
 
@@ -227,7 +251,7 @@ async def main():
 
 
 if __name__ == '__main__':
-    import sentry_sdk
-
-    sentry_sdk.init(os.environ['SENTRY_DSN'])
+    # import sentry_sdk
+    #
+    # sentry_sdk.init(os.environ['SENTRY_DSN'])
     asyncio.run(main())

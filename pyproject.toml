@@ -1,24 +1,21 @@
-[tool.poetry]
+[project]
 name = "apod"
 version = "0.1.0"
 description = ""
-authors = ["Sergey Petrin"]
-readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "beautifulsoup4>=4.12.3",
+    "requests>=2.32.3",
+    "peewee>=3.17.6",
+    "loguru>=0.7.3",
+    "aiogram>=3.7",
+    "python-dotenv>=1.0.0",
+    "langdetect>=1.0.9",
+    "sentry-sdk>=2.14.0",
+    "httpx>=0.28.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.11"
-beautifulsoup4 = "^4.11.1"
-pytest = "^8.2.1"
-requests = "^2.28.2"
-peewee = "^3.15.4"
-loguru = "^0.7.2"
-python-telegram-bot = "^21.2"
-python-dotenv = "^0.21.1"
-langdetect = "^1.0.9"
-sentry-sdk = "^2.14.0"
-httpx = "^0.27.2"
-
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[dependency-groups]
+dev = [
+    "pytest>=8.3.3",
+]

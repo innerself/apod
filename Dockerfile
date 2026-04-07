@@ -2,14 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get -y upgrade && \
-    python3.11 -m pip install --upgrade pip && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+RUN pip install uv
 
-COPY ./requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
 
 COPY ./src .
 
-CMD [ "python", "main.py" ]
+CMD ["uv", "run", "python", "main.py"]
