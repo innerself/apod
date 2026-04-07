@@ -17,6 +17,7 @@ from requests.exceptions import HTTPError, ConnectTimeout
 from aiogram import Bot
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
+from aiogram.types import BufferedInputFile
 from aiogram.utils.text_decorations import markdown_decoration
 
 import models
@@ -202,10 +203,11 @@ async def publish_issues(unpublished: List[models.Issue]):
                     logger.exception(err)
             else:
                 try:
-                    await bot.send_photo(
-                        photo=issue.image_url,
-                        **common_params,
-                    )
+                    response = await web_client.get(issue.image_url)
+                    response.raise_for_status()
+                    filename = issue.image_url.rsplit('/', 1)[-1]
+                    photo = BufferedInputFile(response.content, filename=filename)
+                    await bot.send_photo(photo=photo, **common_params)
                     sent = True
                 except Exception as err:
                     logger.exception(err)
