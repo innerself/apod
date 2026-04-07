@@ -35,7 +35,7 @@ load_dotenv()
 
 root_url = os.environ['ROOT_URL']
 db = SqliteDatabase('db.sqlite')
-web_client = AsyncClient()
+web_client = AsyncClient(follow_redirects=True)
 
 
 @dataclass
